@@ -35,6 +35,8 @@ struct Layout {
     input_station_output_height: f32,
     input_station_width: f32,
     input_station_right_margin: f32,
+    card_height: f32,
+    card_width: f32,
 }
 
 fn main() {
@@ -91,6 +93,8 @@ impl TRONK {
             input_station_right_margin: 50.0,
             input_station_input_height: 50.0,
             input_station_output_height : 150.0,
+            card_height: 120.0,
+            card_width: 180.0,
         }
     }
     fn process_input(&mut self) {
@@ -163,18 +167,40 @@ impl eframe::App for TRONK {
         let screen_height = ctx.screen_rect().height();
         let layout = self.calculate_layout(screen_width, screen_height);
         let num_cards = self.cards.len();
-        let mut selected_card_mut = self.selected_card.clone();
-
-             if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                selected_card_mut = selected_card_mut.map(|index| if index > 0 { index - 1 } else { index });
+        let card_width = layout.card_width;
+        let card_spacing = layout.card_height;
+        let columns = (layout.full_width/ (card_width + card_spacing)).floor() as usize;
+        
+        // Ensure selected_card has a valid value
+        if let Some(index) = self.selected_card {
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                if index >= columns {
+                    self.selected_card = Some(index - columns); // Move to the card above
+                }
             } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                selected_card_mut = selected_card_mut.map(|index| if index + 1 < num_cards { index + 1 } else { index });
+                if index + columns < num_cards {
+                    self.selected_card = Some(index + columns); // Move to the card below
+                }
             } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-                 selected_card_mut = selected_card_mut.map(|index| if index > 0 { index - 1 } else { index });
+                if index > 0 {
+                    self.selected_card = Some(index - 1); // Move to the left
+                }
             } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-                selected_card_mut = selected_card_mut.map(|index| if index + 1 < num_cards { index + 1 } else { index });
+                if index + 1 < num_cards {
+                    self.selected_card = Some(index + 1); // Move to the right
+                }
+            } else if ctx.input(|i| i.key_pressed(egui::Key::O)) {
+                // CHANGEHERE: Set the highlighted card as the selected card on pressing Enter
+                if let Some(selected) = self.selected_card {
+                    self.detailed_card = Some(self.cards[selected].clone());
+                    self.system_output_text = format!("Selected card: {}", self.cards[selected].name);
+                }
             }
-            self.selected_card = selected_card_mut;
+        }
+        else if num_cards > 0 {
+            // Default to selecting the first card
+            self.selected_card = Some(0);
+        }
         if ctx.input(|i| i.key_pressed(egui::Key::Slash)){
             if !self.is_input_station_open{
                 self.is_input_station_open = true;
@@ -182,27 +208,43 @@ impl eframe::App for TRONK {
             }
         }
         //CARD VIEW
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui|{
-                ui.set_height(layout.full_height);
-                ui.set_width(layout.full_width);
-                let frame = egui::Frame {
-                            fill: egui::Color32::BLACK,
-                            stroke: egui::Stroke::new(0.5, egui::Color32::DARK_BLUE),
-                            inner_margin: egui::Margin::same(10.0),
-                            outer_margin: egui::Margin::same(0.0),
-                            ..Default::default()
-                        };
-                        frame.show(ui, |ui| {
-                            egui::ScrollArea::vertical().show(ui, |ui|{
-                                ui.set_width(layout.full_width - 35.0);
-                                ui.set_height(layout.full_height);
-                                ui.horizontal_wrapped(|ui| {
-                                let mut card_index = 0;
-                                for card in &self.cards{
-                                    let is_selected = self.selected_card.map_or(false, |i| i == card_index);
+       egui::CentralPanel::default().show(ctx, |ui| {
+            ui.set_height(layout.full_height);
+            ui.set_width(layout.full_width);
+            let frame = egui::Frame {
+                // fill: egui::Color32::,
+                // stroke: egui::Stroke::new(0.5, egui::Color32::DARK_BLUE),
+                inner_margin: egui::Margin::same(10.0),
+                outer_margin: egui::Margin::same(0.0),
+                ..Default::default()
+            };
+            frame.show(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui|{
+                    ui.set_width(layout.full_width - 35.0);
+                    ui.set_height(layout.full_height);
+                    ui.horizontal_wrapped(|ui| {
+                        let mut card_index = 0;
+                        for card in &self.cards{
+                            let is_selected = self.selected_card.map_or(false, |i| i == card_index);
+                            let card_spacing = 10.0; // Spacing between cards
+                            let available_width = ui.available_width(); // Dynamic parent width
+                            let columns = (available_width / (card_width + card_spacing)).floor() as usize; // Calculate number of columns
+                                    // let card_response = ui.allocate_rect(
+                                    //     egui::Rect::from_min_size(
+                                    //         ui.cursor().min,
+                                    //         egui::vec2(110.0, 90.0), // Card dimensions
+                                    //     ),
+                                    //     egui::Sense::click(),
+                                    // );
+                                    let card_rect = ui.cursor();
+                                    // let card_rect = ui.allocate_space(egui::vec2(110.0, 90.0)); // Reserve space for the card
+                                    let card_size = egui::vec2(110.0, 90.0);
+                                    let card_response = ui.allocate_rect(
+                                        egui::Rect::from_min_size(card_rect.min, card_size),
+                                        egui::Sense::click(),
+                                    );
                                     let card_frame = egui::Frame {
-                                        fill: egui::Color32::WHITE,
+                                        // fill: egui::Color32::WHITE,
                                         stroke: if is_selected {
                                             egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE)
                                         } else {
@@ -210,33 +252,75 @@ impl eframe::App for TRONK {
                                         },
                                     ..Default::default()
                                     };
+                                    
                                     card_frame.show(ui, |ui| {
-                                        ui.set_width(95.0);
-                                        ui.set_height(95.0);
-                                        ui.vertical(|ui| {
-                                            ui.set_height(65.0);
-                                            ui.label("img"); 
-                                        });
+                                        ui.set_width(110.0);
+                                        ui.set_height(90.0);
                                         ui.vertical(|ui|{
-                                            ui.set_height(15.0);
-                                            let mut name = card.name.clone();
-                                            if name.len() > 10{
+                                        ui.horizontal_top(|ui| {
+                                                 ui.set_height(65.0);
+                                                ui.label("img");
+                                            });
+                                        ui.separator();
+                                        ui.horizontal(|ui|{
+                                                ui.set_height(15.0);
+                                                let mut name = card.name.clone();
+                                                if name.len() > 10{
                                                     name.truncate(10);
                                                     name.push_str("...");
                                                 }
-                                                ui.label(name);
-                                                let tags_text = card.tags.iter().map(|tag| format!("#{}", tag)).collect::<Vec<_>>().join(" ");
+                                                 ui.label(name);
+                                            let tags_text = card.tags.iter().map(|tag| format!("#{}", tag)).collect::<Vec<_>>().join(" ");
+                                          ui.horizontal(|ui|{
                                                 ui.label(tags_text);
+                                            })
+                                                });
                                             });
-                                        });
-                                    card_index += 1;    
+                                     });
+                                         if card_response.clicked(){
+                                            self.system_output_text = format!("Clicked card: {}", card.name);
+                                            self.detailed_card = Some(card.clone());
+                                         }
+                                    card_index += 1;
+                                      // CHANGEHERE: Ensure cards wrap correctly to the next row
+                                    if card_index % columns == 0 {
+                                        ui.end_row();
+                                    }
                                     }
                                 });
              });
          });
         });
-    });
+        //DETAILED VIEW
+        let window_width = ctx.screen_rect().width();
+        let window_height = ctx.screen_rect().height();
 
+        if let Some(card) = &self.detailed_card {
+                let mut is_open = true;
+                egui::Window::new("Card Details")
+                    .open(&mut is_open)
+                    .fixed_pos(egui::pos2(window_width / 2.0, 0.0))
+                    .default_width(window_width / 2.0)
+                    .default_height(window_height)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label("image preview");
+                            ui.separator();
+                                ui.label(format!("name: {}", card.name));
+                                ui.separator();
+                                ui.label(format!("tags: {}", card.tags.iter().map(|tag| format!("#{}", tag)).collect::<Vec<_>>().join(" ")));
+                                ui.separator();
+                                ui.label(format!("url: {}", card.url));
+                                ui.separator();
+                            ui.label(format!("description: {}", card.description));
+                        });
+                });
+
+            if !is_open {
+                self.detailed_card = None;
+            }
+       }
         //INPUT STATION WINDOW
         egui::Window::new("input station")
                 .default_pos(egui::pos2(layout.full_width - layout.input_station_width - layout.input_station_right_margin, layout.full_height - layout.input_station_height)) //set position to bottom right
