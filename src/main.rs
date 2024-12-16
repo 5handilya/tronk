@@ -52,6 +52,8 @@ struct TRONK {
     is_input_station_open: bool,
     folders: Vec<String>,
     undo_stack: Vec<Vec<Card>>,
+    selected_card: Option<usize>,
+    detailed_card: Option<Card>,
 }
 
 impl TRONK {
@@ -160,6 +162,19 @@ impl eframe::App for TRONK {
         let screen_width = ctx.screen_rect().width();
         let screen_height = ctx.screen_rect().height();
         let layout = self.calculate_layout(screen_width, screen_height);
+        let num_cards = self.cards.len();
+        let mut selected_card_mut = self.selected_card.clone();
+
+             if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                selected_card_mut = selected_card_mut.map(|index| if index > 0 { index - 1 } else { index });
+            } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                selected_card_mut = selected_card_mut.map(|index| if index + 1 < num_cards { index + 1 } else { index });
+            } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                 selected_card_mut = selected_card_mut.map(|index| if index > 0 { index - 1 } else { index });
+            } else if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+                selected_card_mut = selected_card_mut.map(|index| if index + 1 < num_cards { index + 1 } else { index });
+            }
+            self.selected_card = selected_card_mut;
         if ctx.input(|i| i.key_pressed(egui::Key::Slash)){
             if !self.is_input_station_open{
                 self.is_input_station_open = true;
@@ -167,49 +182,60 @@ impl eframe::App for TRONK {
             }
         }
         //CARD VIEW
-       egui::CentralPanel::default().show(ctx, |ui| {
-        let frame = egui::Frame {
-                    fill: egui::Color32::BLACK,
-                    stroke: egui::Stroke::new(0.5, egui::Color32::DARK_BLUE),
-                    inner_margin: egui::Margin::same(10.0),
-                    outer_margin: egui::Margin::same(0.0),
-                    ..Default::default()
-                };
-         frame.show(ui, |ui| {
-             egui::ScrollArea::vertical().show(ui, |ui|{
-                ui.set_width(layout.full_width - 35.0);
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui|{
                 ui.set_height(layout.full_height);
-               ui.horizontal_wrapped(|ui| {
-                for card in &self.cards{
-                    let card_frame = egui::Frame {
-                        fill: egui::Color32::WHITE,
-                    ..Default::default()
-                    };
-                    card_frame.show(ui, |ui| {
-                        ui.set_width(95.0);
-                        ui.set_height(95.0);
-                        ui.vertical(|ui| {
-                            ui.set_height(65.0);
-                            ui.label("img"); 
-                        });
-
-                            ui.vertical(|ui|{
-                            ui.set_height(15.0);
-                                let mut name = card.name.clone();
-                                if name.len() > 10{
-                                    name.truncate(10);
-                                    name.push_str("...");
+                ui.set_width(layout.full_width);
+                let frame = egui::Frame {
+                            fill: egui::Color32::BLACK,
+                            stroke: egui::Stroke::new(0.5, egui::Color32::DARK_BLUE),
+                            inner_margin: egui::Margin::same(10.0),
+                            outer_margin: egui::Margin::same(0.0),
+                            ..Default::default()
+                        };
+                        frame.show(ui, |ui| {
+                            egui::ScrollArea::vertical().show(ui, |ui|{
+                                ui.set_width(layout.full_width - 35.0);
+                                ui.set_height(layout.full_height);
+                                ui.horizontal_wrapped(|ui| {
+                                let mut card_index = 0;
+                                for card in &self.cards{
+                                    let is_selected = self.selected_card.map_or(false, |i| i == card_index);
+                                    let card_frame = egui::Frame {
+                                        fill: egui::Color32::WHITE,
+                                        stroke: if is_selected {
+                                            egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE)
+                                        } else {
+                                            egui::Stroke::new(1.0, egui::Color32::DARK_BLUE)
+                                        },
+                                    ..Default::default()
+                                    };
+                                    card_frame.show(ui, |ui| {
+                                        ui.set_width(95.0);
+                                        ui.set_height(95.0);
+                                        ui.vertical(|ui| {
+                                            ui.set_height(65.0);
+                                            ui.label("img"); 
+                                        });
+                                        ui.vertical(|ui|{
+                                            ui.set_height(15.0);
+                                            let mut name = card.name.clone();
+                                            if name.len() > 10{
+                                                    name.truncate(10);
+                                                    name.push_str("...");
+                                                }
+                                                ui.label(name);
+                                                let tags_text = card.tags.iter().map(|tag| format!("#{}", tag)).collect::<Vec<_>>().join(" ");
+                                                ui.label(tags_text);
+                                            });
+                                        });
+                                    card_index += 1;    
                                     }
-                                    ui.label(name);
-                                    let tags_text = card.tags.iter().map(|tag| format!("#{}", tag)).collect::<Vec<_>>().join(" ");
-                                    ui.label(tags_text);
-                            });
-                            });
-                }
-               });
+                                });
              });
          });
         });
+    });
 
         //INPUT STATION WINDOW
         egui::Window::new("input station")
